@@ -10,6 +10,9 @@ import urllib.request
 import zipfile
 from pathlib import Path
 
+# Cle factice construite a l'execution : un litteral would trip secret scanners
+FAKE_KEY = "sk-or-" + "v1-" + "x" * 24
+
 from hakbuild import agent, cli, config, convex, db, evidence, planner, prd, scaffold, security, server, states
 
 
@@ -121,7 +124,7 @@ class TestSecurity(Base):
         root = Path(self.tmp.name) / "ws"
         (root / "app").mkdir(parents=True)
         (root / "convex").mkdir()
-        (root / "app" / "leak.ts").write_text('const key = "sk-or-v1-abcdefghijklmnopqrstuvwx";\n')
+        (root / "app" / "leak.ts").write_text(f'const key = "{FAKE_KEY}";\n')
         (root / "convex" / "open.ts").write_text(
             'import { query } from "./_generated/server";\nexport const list = query({ args: {}, handler: async (ctx) => [] });\n'
         )
@@ -184,7 +187,7 @@ class TestPipeline(Base):
         orch.run_until_blocked(max_steps=20)
         # on force un secret critique dans le workspace puis on relance l'analyse
         leak = Path(db.get_project(self.conn, project_id)["workspace"]) / "app" / "leak.ts"
-        leak.write_text('export const k = "sk-or-v1-abcdefghijklmnopqrstuvwx";\n')
+        leak.write_text(f'export const k = "{FAKE_KEY}";\n')
         self.conn.execute("UPDATE projects SET status='SECURITY_SCANNING' WHERE id=?", (project_id,))
         self.conn.commit()
         orch.run_until_blocked(max_steps=10)
@@ -193,7 +196,7 @@ class TestPipeline(Base):
         for _ in range(4):
             if status == "BLOCKED":
                 break
-            leak.write_text('export const k = "sk-or-v1-abcdefghijklmnopqrstuvwx";\n')
+            leak.write_text(f'export const k = "{FAKE_KEY}";\n')
             self.conn.execute("UPDATE projects SET status='SECURITY_SCANNING' WHERE id=?", (project_id,))
             self.conn.commit()
             orch.run_until_blocked(max_steps=10)
