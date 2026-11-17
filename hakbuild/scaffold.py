@@ -12,6 +12,7 @@ from string import Template
 
 from . import convex as convex_mod
 from . import prd as prd_mod
+from .build import eas_json as _eas_json
 
 THEME = """export const theme = {
   colors: {
@@ -453,9 +454,11 @@ def app_files(project: dict) -> dict[str, str]:
                 "userInterfaceStyle": "dark",
                 "newArchEnabled": True,
                 "splash": {"backgroundColor": "#0B0F14", "resizeMode": "contain"},
-                "ios": {"supportsTablet": True, "bundleIdentifier": f"com.hakbuild.{slug.replace('-', '')}"},
+                "ios": {"supportsTablet": True, "bundleIdentifier": f"com.hakbuild.{slug.replace('-', '')}",
+                        "buildNumber": "1"},
                 "android": {
                     "package": f"com.hakbuild.{slug.replace('-', '')}",
+                    "versionCode": 1,
                     "edgeToEdgeEnabled": True,
                     "permissions": ["INTERNET"],
                 },
@@ -494,6 +497,7 @@ def app_files(project: dict) -> dict[str, str]:
     files[".env.example"] = ENV_EXAMPLE
     files[".gitignore"] = GITIGNORE
     files["lib/api.ts"] = LIB_API
+    files["eas.json"] = _eas_json()
     files["babel.config.js"] = (
         "module.exports = function (api) {\n"
         "  api.cache(true);\n"

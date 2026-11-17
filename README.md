@@ -59,6 +59,22 @@ Sans deployment Convex, `convex/_generated` n'existe pas : les seules erreurs `t
 sont dans `convex/*.ts` et disparaissent après `npx convex dev`. L'application
 elle-même (app/, lib/, constants/) n'en produit aucune.
 
+## APK (EAS Build)
+
+```bash
+python -m hakbuild.cli preflight <id>          # liste exacte de ce qui bloque
+python -m hakbuild.cli apk <id>                # prepare (git + eas init) sans compiler
+python -m hakbuild.cli apk <id> --execute      # lance EAS Build reel
+```
+
+`preflight` contrôle : `package.json`, `eas.json`, slug, package Android, `node_modules`,
+dépôt git avec au moins un commit, `EXPO_TOKEN`, projet EAS lié (`eas init`).
+
+Le jeton se met dans `.env` (`EXPO_TOKEN=...`, créé sur expo.dev/settings/access-tokens)
+et n'est jamais passé en argument de commande ni affiché : `runner.run(env=...)` injecte
+l'environnement du processus enfant. Sans jeton, `apk --execute` répond `blocked` avec
+la liste des blocages — aucun succès simulé.
+
 ## Modes de build
 
 - `BUILD_MODE=dry-run` (défaut) : le plan de commandes est enregistré, aucun APK n'est

@@ -282,6 +282,27 @@ class Handler(BaseHTTPRequestHandler):
                         return self._send_json({"error": "projet inconnu"}, 404)
                     result = verify.verify_web(self.conn, project_id, install=bool(data.get("install")))
                     return self._send_json(result)
+
+                if parsed.path == "/api/preflight":
+                    from . import build
+
+                    project_id = data.get("id") or ""
+                    if db.get_project(self.conn, project_id) is None:
+                        return self._send_json({"error": "projet inconnu"}, 404)
+                    return self._send_json(build.preflight(self.conn, project_id))
+
+                if parsed.path == "/api/apk":
+                    from . import build
+
+                    project_id = data.get("id") or ""
+                    if db.get_project(self.conn, project_id) is None:
+                        return self._send_json({"error": "projet inconnu"}, 404)
+                    result = build.build_apk(
+                        self.conn, project_id,
+                        profile=data.get("profile") or "preview",
+                        execute=bool(data.get("execute")),
+                    )
+                    return self._send_json(result)
         except Exception as exc:  # noqa: BLE001 - remonte au client sans secret
             return self._send_json({"error": str(exc), "type": type(exc).__name__}, 500)
 

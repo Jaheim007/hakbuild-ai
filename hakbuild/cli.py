@@ -179,6 +179,24 @@ def cmd_verify(args) -> int:
     return 0 if result.get("ok") else 1
 
 
+def cmd_preflight(args) -> int:
+    from . import build
+
+    conn = _conn()
+    state = build.preflight(conn, args.id)
+    print(json.dumps(state, indent=2, ensure_ascii=False))
+    return 0 if state["ready"] else 1
+
+
+def cmd_apk(args) -> int:
+    from . import build
+
+    conn = _conn()
+    result = build.build_apk(conn, args.id, profile=args.profile, execute=args.execute)
+    print(json.dumps(result, indent=2, ensure_ascii=False))
+    return 0 if result.get("ok") else 1
+
+
 def cmd_tickets(args) -> int:
     conn = _conn()
     project = db.get_project(conn, args.id)
@@ -265,6 +283,16 @@ def main(argv=None) -> int:
     p.add_argument("id")
     p.add_argument("--install", action="store_true", help="lance npm install si node_modules manque")
     p.set_defaults(func=cmd_verify)
+
+    p = sub.add_parser("preflight", help="verifie ce qui bloque la generation de l'APK")
+    p.add_argument("id")
+    p.set_defaults(func=cmd_preflight)
+
+    p = sub.add_parser("apk", help="prepare puis lance le build EAS (EXPO_TOKEN requis)")
+    p.add_argument("id")
+    p.add_argument("--profile", default="preview", choices=["development", "preview", "production"])
+    p.add_argument("--execute", action="store_true", help="lance EAS reellement (sinon BUILD_MODE)")
+    p.set_defaults(func=cmd_apk)
 
     p = sub.add_parser("serve", help="lance le dashboard web")
     p.add_argument("--host", default=config.settings().get("HOST", "127.0.0.1"))

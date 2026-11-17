@@ -5,6 +5,7 @@ dependances manquent, l'echec est enregistre tel quel et remonte au projet.
 """
 from __future__ import annotations
 
+import os
 import shutil
 import subprocess
 import time
@@ -39,7 +40,7 @@ def is_allowed(command: str) -> bool:
 
 
 def run(conn, project_id: str, command: str, cwd: Path, timeout: int = DEFAULT_TIMEOUT,
-        task_id: str | None = None) -> dict:
+        task_id: str | None = None, env: dict | None = None) -> dict:
     """Execute une commande autorisee et enregistre la preuve dans agent_runs."""
     if not is_allowed(command):
         raise CommandRefused(f"commande hors liste blanche: {command}")
@@ -59,6 +60,9 @@ def run(conn, project_id: str, command: str, cwd: Path, timeout: int = DEFAULT_T
         return result
 
     started = time.time()
+    child_env = dict(os.environ)
+    if env:
+        child_env.update({k: v for k, v in env.items() if v})
     try:
         proc = subprocess.run(
             command,
@@ -69,6 +73,7 @@ def run(conn, project_id: str, command: str, cwd: Path, timeout: int = DEFAULT_T
             timeout=timeout,
             encoding="utf-8",
             errors="replace",
+            env=child_env,
         )
         output = (proc.stdout or "") + (proc.stderr or "")
         exit_code = proc.returncode

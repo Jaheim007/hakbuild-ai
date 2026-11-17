@@ -9,7 +9,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
-from . import config, db, evidence, planner, prd, runner, scaffold, security, states
+from . import config, db, evidence, planner, prd, scaffold, security, states
 
 MAX_FIX_ATTEMPTS = 3
 
@@ -276,51 +276,43 @@ class Orchestrator:
         return {"state": "TESTING", "action": "fixed"}
 
     def _on_BUILDING(self) -> dict:
+        from . import build
+
         mode = config.settings().get("BUILD_MODE", "dry-run")
-        commands = [runner.STEPS["npm_install"], runner.STEPS["eas_build"]]
+        state = build.preflight(self.conn, self.project_id)
         build_id = db.new_id("bld")
+
         if mode != "execute":
+            note = "dry-run"
+            if state["blockers"]:
+                note += " | blocages: " + "; ".join(state["blockers"])
+            else:
+                note += " | projet pret : npx eas-cli build --platform android --profile preview"
             self.conn.execute(
                 "INSERT INTO builds (id, project_id, platform, profile, status, artifact_path, note, created_at, updated_at)"
                 " VALUES (?, ?, 'android', 'preview', 'planned', NULL, ?, ?, ?)",
-                (
-                    build_id,
-                    self.project_id,
-                    "dry-run: " + " && ".join(commands),
-                    db.now(),
-                    db.now(),
-                ),
+                (build_id, self.project_id, note, db.now(), db.now()),
             )
             self.conn.commit()
-            self._complete("T09", "plan de build enregistre (dry-run, mode BUILD_MODE=execute pour compiler)")
-            db.log(self.conn, "Build planifie (dry-run) : " + " && ".join(commands), self.project_id)
+            self._complete("T09", f"plan de build enregistre ({len(state['blockers'])} blocage(s) restant(s))")
+            db.log(self.conn, f"Build planifie (dry-run), {len(state['blockers'])} blocage(s): {note}", self.project_id)
             states.transition(self.conn, self.project_id, "COMPLETED", reason="build planifie")
-            return {"state": "COMPLETED", "action": "build_planned", "build_id": build_id}
+            return {"state": "COMPLETED", "action": "build_planned", "build_id": build_id,
+                    "blockers": state["blockers"]}
 
-        install = runner.run(self.conn, self.project_id, runner.STEPS["npm_install"], self.workspace)
-        if install["exit_code"] != 0:
-            self._record_build(build_id, "failed", None, f"npm install: {install['exit_code']}")
-            attempts = self._fail("T09", "npm install en echec")
-            target = "BLOCKED" if attempts >= MAX_FIX_ATTEMPTS else "FIXING"
-            states.transition(self.conn, self.project_id, target, reason="build en echec")
-            return {"state": target, "action": "build_failed", "exit_code": install["exit_code"]}
+        result = build.build_apk(self.conn, self.project_id, "preview", execute=True)
+        if result.get("ok") and result.get("status") == "queued":
+            self._complete("T09", f"EAS build lance: {result.get('build_url') or 'en file'}")
+            db.log(self.conn, f"EAS build lance: {result.get('build_url')}", self.project_id)
+            states.transition(self.conn, self.project_id, "COMPLETED", reason="build EAS lance")
+            return {"state": "COMPLETED", "action": "build_queued", "build_url": result.get("build_url")}
 
-        build = runner.run(self.conn, self.project_id, runner.STEPS["eas_build"], self.workspace, timeout=1800)
-        artifact = self._find_apk()
-        status = "succeeded" if build["exit_code"] == 0 and artifact else "failed"
-        self._record_build(build_id, status, str(artifact) if artifact else None, build["output"][-500:])
-        if status != "succeeded":
-            attempts = self._fail("T09", f"EAS exit {build['exit_code']}")
-            if attempts >= MAX_FIX_ATTEMPTS:
-                states.transition(self.conn, self.project_id, "BLOCKED", reason="compilation impossible")
-                return {"state": "BLOCKED", "action": "build_failed", "exit_code": build["exit_code"]}
-            states.transition(self.conn, self.project_id, "FIXING", reason="compilation en echec")
-            return {"state": "FIXING", "action": "build_failed", "exit_code": build["exit_code"]}
-
-        db.record_artifact(self.conn, self.project_id, "apk", artifact)
-        self._complete("T09", f"APK genere: {artifact}")
-        states.transition(self.conn, self.project_id, "COMPLETED", reason="compilation reussie")
-        return {"state": "COMPLETED", "action": "build_succeeded", "artifact": str(artifact)}
+        self._record_build(build_id, "failed", None, (result.get("detail") or result.get("status") or "")[:400])
+        attempts = self._fail("T09", result.get("detail") or result.get("status") or "build echoue")
+        target = "BLOCKED" if attempts >= MAX_FIX_ATTEMPTS else "FIXING"
+        states.transition(self.conn, self.project_id, target, reason="build en echec")
+        return {"state": target, "action": "build_failed", "blockers": result.get("blockers"),
+                "detail": result.get("detail") or result.get("status")}
 
     def _find_apk(self) -> Path | None:
         for path in sorted(self.workspace.rglob("*.apk")):

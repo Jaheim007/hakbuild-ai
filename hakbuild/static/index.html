@@ -257,6 +257,7 @@ function renderWorkspace(data) {
     await openProject(p.id);
   }, pending ? '' : 'primary'));
   const verifyLine = el('div', { class: 'muted', style: 'font-size:12px;margin-top:8px' });
+  const apkLine = el('div', { class: 'muted', style: 'font-size:12px;margin-top:4px' });
   actions.append(actionButton('Verifier le build web', async () => {
     verifyLine.textContent = 'Bundling Expo Web (peut prendre 1-3 min)…';
     let res = await api('/api/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id }) });
@@ -286,8 +287,24 @@ function renderWorkspace(data) {
     dl.append(el('button', { class: 'primary', text: 'Telecharger le bundle' }));
     actions.append(dl);
   }
+  actions.append(actionButton('Preparer l\'APK', async () => {
+    apkLine.textContent = 'Verification du projet…';
+    const state = await api('/api/preflight', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id }) });
+    if (!state.ready) {
+      apkLine.textContent = 'Blocages : ' + state.blockers.join(' · ');
+      apkLine.style.color = 'var(--warn)';
+      return;
+    }
+    apkLine.textContent = 'Projet pret (git, deps, jeton, projet EAS lié).';
+    apkLine.style.color = 'var(--ok)';
+    if (!confirm('Lancer le build EAS reel (Android, profil preview) ?')) return;
+    const res = await api('/api/apk', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id, execute: true }) });
+    apkLine.textContent = res.build_url ? 'Build lance : ' + res.build_url : 'Echec : ' + (res.detail || res.status);
+    apkLine.style.color = res.ok ? 'var(--ok)' : 'var(--err)';
+  }));
   ws.append(actions);
   ws.append(verifyLine);
+  ws.append(apkLine);
 
   const tabs = el('div', { class: 'tabs' });
   const tabDefs = [['prd', 'PRD'], ['tasks', 'Taches'], ['logs', 'Logs'], ['chat', 'Chat'], ['quality', 'Tests & Securite'], ['runs', 'Executions']];

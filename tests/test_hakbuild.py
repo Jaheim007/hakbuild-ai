@@ -215,6 +215,57 @@ class TestVerify(Base):
         self.assertIn("DEVELOPING", result["error"])
 
 
+class TestBuild(Base):
+    def test_eas_json_valid(self):
+        files = scaffold.app_files({"name": "Build Test", "idea": "reservation", "platforms": "android"})
+        eas = json.loads(files["eas.json"])
+        self.assertEqual(eas["build"]["preview"]["android"]["buildType"], "apk")
+        self.assertEqual(eas["build"]["production"]["android"]["buildType"], "app-bundle")
+        app_cfg = json.loads(files["app.json"])
+        self.assertEqual(app_cfg["expo"]["android"]["versionCode"], 1)
+
+    def test_preflight_lists_blockers(self):
+        from hakbuild import build
+
+        project_id = cli.create_project(self.conn, "Preflight", "reservation", "android")
+        workspace = Path(db.get_project(self.conn, project_id)["workspace"])
+        for rel, content in scaffold.app_files(dict(db.get_project(self.conn, project_id))).items():
+            path = workspace / rel
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content, encoding="utf-8")
+        state = build.preflight(self.conn, project_id)
+        self.assertFalse(state["ready"])
+        joined = " ".join(state["blockers"]).lower()
+        self.assertIn("npm install", joined)
+        self.assertIn("token", joined)
+        self.assertIn("eas-cli init", joined)
+        keys = {c["key"] for c in state["checks"]}
+        self.assertEqual(len(keys), 8)
+        self.assertIn("eas_json", keys)
+        self.assertIn("expo_token", keys)
+
+    def test_token_is_detected_without_leaking(self):
+        from hakbuild import build
+
+        os.environ["EXPO_TOKEN"] = "expo-test-token-value"
+        try:
+            self.assertTrue(build.token())
+            self.assertEqual(build.env_with_token()["EXPO_TOKEN"], "expo-test-token-value")
+        finally:
+            os.environ.pop("EXPO_TOKEN", None)
+
+    def test_build_without_token_is_blocked_honestly(self):
+        from hakbuild import build
+
+        os.environ.pop("EXPO_TOKEN", None)
+        os.environ.pop("EAS_TOKEN", None)
+        project_id = cli.create_project(self.conn, "NoToken", "reservation", "android")
+        result = build.build_apk(self.conn, project_id, execute=True)
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["status"], "blocked")
+        self.assertTrue(result["blockers"])
+
+
 class TestServer(Base):
     def test_api_endpoints(self):
         httpd = server.make_server(self.conn, "127.0.0.1", 0)
