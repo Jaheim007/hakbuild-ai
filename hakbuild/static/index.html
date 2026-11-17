@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>HakBuild AI</title>
+<style>
+  :root{
+    --bg:#0B0F14; --surface:#141A22; --surface-2:#18202A; --border:#1F2937;
+    --text:#F8FAFC; --muted:#94A3B8; --accent:#3B82F6; --ok:#22C55E;
+    --warn:#F59E0B; --err:#EF4444; --radius:14px;
+    --font: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--text);font-family:var(--font);font-size:14px}
+  header{display:flex;align-items:center;gap:16px;padding:14px 20px;border-bottom:1px solid var(--border);background:var(--surface)}
+  header h1{font-size:17px;margin:0;letter-spacing:.3px}
+  header .dot{width:9px;height:9px;border-radius:50%;background:var(--ok);display:inline-block;margin-right:6px}
+  header .meta{margin-left:auto;display:flex;gap:14px;color:var(--muted);font-size:12px;align-items:center}
+  main{display:grid;grid-template-columns:300px 1fr;gap:0;height:calc(100vh - 58px)}
+  aside{border-right:1px solid var(--border);padding:14px;overflow:auto}
+  aside h2{font-size:12px;text-transform:uppercase;letter-spacing:.8px;color:var(--muted);margin:4px 0 12px}
+  .project{padding:10px 12px;border:1px solid var(--border);border-radius:10px;background:var(--surface);margin-bottom:8px;cursor:pointer}
+  .project:hover{border-color:var(--accent)}
+  .project.active{border-color:var(--accent);background:var(--surface-2)}
+  .project .name{font-weight:600;display:flex;justify-content:space-between;gap:8px}
+  .project .sub{color:var(--muted);font-size:11px;margin-top:4px}
+  section.workspace{padding:18px 22px;overflow:auto}
+  .row{display:flex;gap:10px;flex-wrap:wrap;align-items:center}
+  .badge{font-size:11px;padding:3px 9px;border-radius:999px;border:1px solid var(--border);background:var(--surface-2);color:var(--muted)}
+  .badge.ok{color:#bbf7d0;border-color:#14532d;background:#052e16}
+  .badge.warn{color:#fde68a;border-color:#78350f;background:#2a1b06}
+  .badge.err{color:#fecaca;border-color:#7f1d1d;background:#2b0b0b}
+  button{cursor:pointer;border-radius:10px;border:1px solid var(--border);background:var(--surface-2);color:var(--text);padding:8px 13px;font:inherit}
+  button:hover{border-color:var(--accent)}
+  button.primary{background:var(--accent);border-color:var(--accent);color:#fff;font-weight:600}
+  button:disabled{opacity:.45;cursor:not-allowed}
+  .card{border:1px solid var(--border);background:var(--surface);border-radius:var(--radius);padding:16px;margin-top:14px}
+  .card h3{margin:0 0 10px;font-size:13px;text-transform:uppercase;letter-spacing:.7px;color:var(--muted)}
+  .tabs{display:flex;gap:6px;margin-top:16px;border-bottom:1px solid var(--border);flex-wrap:wrap}
+  .tabs button{border:none;border-bottom:2px solid transparent;border-radius:0;background:transparent;color:var(--muted);padding:8px 10px}
+  .tabs button.active{color:var(--text);border-bottom-color:var(--accent)}
+  pre{margin:0;white-space:pre-wrap;word-break:break-word;font-family:ui-monospace,SFMono-Regular,Consolas,monospace;font-size:12px;line-height:1.55;color:#cbd5e1}
+  input,textarea,select{width:100%;background:var(--bg);border:1px solid var(--border);border-radius:10px;color:var(--text);padding:10px 12px;font:inherit}
+  textarea{min-height:90px;resize:vertical}
+  label{display:block;font-size:12px;color:var(--muted);margin:10px 0 5px}
+  table{width:100%;border-collapse:collapse;font-size:12px}
+  th,td{text-align:left;padding:7px 8px;border-bottom:1px solid var(--border)}
+  th{color:var(--muted);font-weight:500}
+  .tasks li{list-style:none;padding:8px 0;border-bottom:1px solid var(--border);display:flex;gap:10px;align-items:flex-start}
+  .tasks ul{margin:0;padding:0;max-height:420px;overflow:auto}
+  .muted{color:var(--muted)}
+  .empty{padding:26px;text-align:center;color:var(--muted);border:1px dashed var(--border);border-radius:var(--radius)}
+  .chat{display:flex;flex-direction:column;gap:8px;max-height:360px;overflow:auto;padding:8px 0}
+  .msg{padding:9px 12px;border-radius:12px;max-width:88%;white-space:pre-wrap;line-height:1.5}
+  .msg.user{align-self:flex-end;background:#1D4ED8}
+  .msg.agent{align-self:flex-start;background:var(--surface-2);border:1px solid var(--border)}
+  .spinner{width:14px;height:14px;border:2px solid var(--muted);border-top-color:transparent;border-radius:50%;display:inline-block;animation:s .8s linear infinite;vertical-align:-2px}
+  @keyframes s{to{transform:rotate(360deg)}}
+  .steps{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px}
+  .step{font-size:10px;padding:3px 8px;border-radius:6px;border:1px solid var(--border);color:var(--muted)}
+  .step.done{background:#052e16;border-color:#14532d;color:#bbf7d0}
+  .step.current{background:#1e3a8a;border-color:#1d4ed8;color:#dbeafe}
+  .grid2{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+  @media (max-width:900px){main{grid-template-columns:1fr}aside{border-right:none;border-bottom:1px solid var(--border)}.grid2{grid-template-columns:1fr}}
+</style>
+</head>
+<body>
+<header>
+  <h1><span class="dot"></span>HakBuild AI</h1>
+  <div class="meta">
+    <span id="buildMode">mode …</span>
+    <span id="secretsInfo">secrets …</span>
+    <span id="projectCount">0 projet</span>
+  </div>
+</header>
+
+<main>
+  <aside>
+    <div class="row" style="justify-content:space-between">
+      <h2>Projets</h2>
+      <button id="newBtn" class="primary" style="padding:5px 10px">+ Nouveau</button>
+    </div>
+    <div id="projectList" class="empty">Chargement…</div>
+  </aside>
+
+  <section class="workspace">
+    <div id="workspace">
+      <div class="empty">Selectionnez un projet ou creez-en un.</div>
+    </div>
+  </section>
+</main>
+
+<script>
+const state = { projects: [], current: null, tab: 'prd' };
+const $ = (id) => document.getElementById(id);
+const el = (tag, props = {}, ...children) => {
+  const node = document.createElement(tag);
+  Object.entries(props).forEach(([k, v]) => {
+    if (k === 'class') node.className = v;
+    else if (k === 'text') node.textContent = v;
+    else if (k.startsWith('on')) node.addEventListener(k.slice(2), v);
+    else node.setAttribute(k, v);
+  });
+  children.filter(Boolean).forEach((c) => node.append(c));
+  return node;
+};
+
+async function api(path, options) {
+  const res = await fetch(path, options);
+  const data = await res.json().catch(() => ({ error: 'reponse invalide' }));
+  if (!res.ok) throw new Error(data.error || `HTTP ${res.status}`);
+  return data;
+}
+
+function badgeFor(status) {
+  const ok = ['COMPLETED'].includes(status);
+  const warn = ['AWAITING_APPROVAL', 'BLOCKED', 'FAILED', 'BUILDING'].includes(status);
+  const cls = ok ? 'badge ok' : warn ? 'badge warn' : 'badge';
+  return el('span', { class: cls, text: status });
+}
+
+async function loadState() {
+  try {
+    const s = await api('/api/state');
+    $('buildMode').textContent = `build: ${s.build_mode}`;
+    const missing = Object.entries(s.secrets).filter(([, v]) => !v).map(([k]) => k);
+    $('secretsInfo').textContent = missing.length ? `${missing.length} secret(s) absent(s)` : 'secrets complets';
+  } catch (e) { $('secretsInfo').textContent = 'etat indisponible'; }
+}
+
+async function loadProjects() {
+  try {
+    state.projects = await api('/api/projects');
+    $('projectCount').textContent = `${state.projects.length} projet(s)`;
+    renderProjects();
+  } catch (e) {
+    $('projectList').className = 'empty';
+    $('projectList').textContent = 'Erreur de chargement : ' + e.message;
+  }
+}
+
+function renderProjects() {
+  const list = $('projectList');
+  list.className = '';
+  list.innerHTML = '';
+  if (!state.projects.length) {
+    list.className = 'empty';
+    list.textContent = 'Aucun projet. Cliquez sur « Nouveau ».';
+    return;
+  }
+  state.projects.forEach((p) => {
+    const node = el('div', {
+      class: 'project' + (state.current === p.id ? ' active' : ''),
+      onclick: () => openProject(p.id),
+    },
+      el('div', { class: 'name' }, el('span', { text: p.name }), badgeFor(p.status)),
+      el('div', { class: 'sub', text: `${p.platforms} · ${p.created_at.replace('T', ' ').slice(0, 16)}` })
+    );
+    list.append(node);
+  });
+}
+
+function newProjectForm() {
+  const wrap = el('div', { class: 'card' });
+  wrap.append(el('h3', { text: 'Nouveau projet' }));
+  const name = el('input', { placeholder: 'Nom de l’application' });
+  const idea = el('textarea', { placeholder: 'Decrivez l’application, la souffrance, les fonctionnalites attendues…' });
+  const platforms = el('select');
+  [['android', 'Android'], ['ios', 'iOS'], ['both', 'Android + iOS']].forEach(([v, l]) => {
+    platforms.append(el('option', { value: v, text: l }));
+  });
+  const status = el('div', { class: 'muted', style: 'margin-top:10px' });
+  const submit = el('button', { class: 'primary', text: 'Creer le projet', style: 'margin-top:12px' });
+  submit.onclick = async () => {
+    if (!name.value.trim() || !idea.value.trim()) { status.textContent = 'Nom et description obligatoires.'; return; }
+    submit.disabled = true; status.textContent = 'Creation…';
+    try {
+      const res = await api('/api/projects', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: name.value.trim(), idea: idea.value.trim(), platforms: platforms.value }),
+      });
+      await loadProjects();
+      await openProject(res.id);
+    } catch (e) { status.textContent = 'Echec : ' + e.message; submit.disabled = false; }
+  };
+  wrap.append(el('label', { text: 'Nom' }), name, el('label', { text: 'Description de l’idee' }), idea,
+    el('label', { text: 'Plateformes' }), platforms, submit, status);
+  $('workspace').innerHTML = '';
+  $('workspace').append(wrap);
+}
+
+function applySnapshot(data) {
+  const id = data.project.id;
+  state.projects = state.projects.map((p) => (p.id === id ? { ...p, status: data.project.status } : p));
+  renderProjects();
+  renderWorkspace(data);
+}
+
+async function openProject(id) {
+  state.current = id;
+  state.tab = 'prd';
+  renderProjects();
+  $('workspace').innerHTML = '<div class="empty"><span class="spinner"></span> Chargement du projet…</div>';
+  try {
+    const data = await api('/api/project?id=' + encodeURIComponent(id));
+    if (data.error) throw new Error(data.error);
+    applySnapshot(data);
+  } catch (e) {
+    $('workspace').innerHTML = '';
+    $('workspace').append(el('div', { class: 'empty', text: 'Erreur : ' + e.message }));
+  }
+}
+
+function actionButton(label, handler, cls = '') {
+  const btn = el('button', { class: cls, text: label });
+  btn.onclick = async () => {
+    btn.disabled = true;
+    const original = label;
+    btn.innerHTML = '<span class="spinner"></span> ' + original;
+    try { await handler(); } catch (e) { alert('Erreur : ' + e.message); }
+    btn.disabled = false; btn.textContent = original;
+  };
+  return btn;
+}
+
+function renderWorkspace(data) {
+  const p = data.project;
+  const ws = $('workspace');
+  ws.innerHTML = '';
+
+  const header = el('div', { class: 'row' });
+  header.append(el('div', {}, el('div', { style: 'font-size:20px;font-weight:700', text: p.name }),
+    el('div', { class: 'muted', style: 'font-size:12px;margin-top:3px', text: `${p.id} · ${p.platforms} · ${data.label}` })));
+  header.append(el('div', { style: 'margin-left:auto' }, badgeFor(p.status)));
+  ws.append(header);
+
+  const steps = el('div', { class: 'steps' });
+  const order = ['PENDING','ANALYZING','AWAITING_APPROVAL','PLANNING','DESIGNING','DEVELOPING','CONFIGURING_BACKEND','INTEGRATING','TESTING','SECURITY_SCANNING','BUILDING','COMPLETED'];
+  const idx = order.indexOf(p.status);
+  order.forEach((s, i) => {
+    const cls = 'step' + (i < idx ? ' done' : i === idx ? ' current' : '');
+    steps.append(el('span', { class: cls, text: s }));
+  });
+  ws.append(steps);
+
+  const actions = el('div', { class: 'row', style: 'margin-top:14px' });
+  const pending = data.approvals.find((a) => a.status === 'PENDING');
+  if (pending) {
+    actions.append(actionButton('Valider le PRD', async () => {
+      await api('/api/approve', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id }) });
+      await openProject(p.id);
+    }, 'primary'));
+  }
+  actions.append(actionButton('Avancer le pipeline', async () => {
+    await api('/api/advance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id }) });
+    await openProject(p.id);
+  }, pending ? '' : 'primary'));
+  if (p.status === 'COMPLETED') {
+    actions.append(actionButton('Regenerer le livrable', async () => {
+      await api('/api/bundle', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id }) });
+      await openProject(p.id);
+    }));
+    const dl = el('a', { href: '/api/download?id=' + encodeURIComponent(p.id) + '&kind=bundle' });
+    dl.append(el('button', { class: 'primary', text: 'Telecharger le bundle' }));
+    actions.append(dl);
+  }
+  ws.append(actions);
+
+  const tabs = el('div', { class: 'tabs' });
+  const tabDefs = [['prd', 'PRD'], ['tasks', 'Taches'], ['logs', 'Logs'], ['chat', 'Chat'], ['quality', 'Tests & Securite'], ['runs', 'Executions']];
+  tabDefs.forEach(([key, label]) => {
+    const b = el('button', { class: state.tab === key ? 'active' : '', text: label });
+    b.onclick = () => { state.tab = key; renderWorkspace(data); };
+    tabs.append(b);
+  });
+  ws.append(tabs);
+
+  const panel = el('div', { class: 'card' });
+  if (state.tab === 'prd') {
+    const prd = data.prd[0];
+    if (!prd) panel.append(el('div', { class: 'empty', text: 'Aucun PRD encore genere. Cliquez sur « Avancer ».' }));
+    else {
+      panel.append(el('h3', { text: `PRD v${prd.version} · ${prd.status}` }));
+      panel.append(el('pre', { text: prd.content }));
+    }
+  } else if (state.tab === 'tasks') {
+    panel.append(el('h3', { text: `${data.tasks.length} tache(s)` }));
+    const ul = el('ul', { class: 'tasks' });
+    data.tasks.forEach((t) => {
+      ul.append(el('li', {},
+        el('span', { text: t.status === 'DONE' ? '✓' : t.status === 'TODO' ? '○' : '!' , style: 'color:' + (t.status === 'DONE' ? 'var(--ok)' : 'var(--muted)') }),
+        el('div', {},
+          el('div', { text: `${t.code} · ${t.title}` }),
+          el('div', { class: 'muted', style: 'font-size:11px', text: `${t.phase} · ${t.status} · tentatives ${t.attempts}` }),
+          t.evidence ? el('div', { style: 'font-size:11px;color:var(--ok)', text: t.evidence }) : null,
+          t.last_error ? el('div', { style: 'font-size:11px;color:var(--err)', text: t.last_error }) : null
+        )
+      ));
+    });
+    panel.append(ul);
+  } else if (state.tab === 'logs') {
+    panel.append(el('h3', { text: 'Journal' }));
+    panel.append(el('pre', { text: data.logs.map((l) => `${l.created_at.slice(11, 19)} [${l.level}] ${l.message}`).join('\n') || 'Aucun log.' }));
+  } else if (state.tab === 'chat') {
+    panel.append(el('h3', { text: 'Conversation agent' }));
+    const chatBox = el('div', { class: 'chat' });
+    data.messages.forEach((m) => chatBox.append(el('div', { class: 'msg ' + m.role, text: m.content })));
+    panel.append(chatBox);
+    const input = el('textarea', { placeholder: 'Ex. : avancer, statut, prd, tickets, securite' });
+    const send = el('button', { class: 'primary', text: 'Envoyer', style: 'margin-top:8px' });
+    send.onclick = async () => {
+      if (!input.value.trim()) return;
+      send.disabled = true;
+      try {
+        const res = await api('/api/chat', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id, message: input.value.trim() }) });
+        applySnapshot(res.snapshot);
+      } catch (e) { alert('Erreur : ' + e.message); send.disabled = false; }
+    };
+    panel.append(input, send);
+  } else if (state.tab === 'quality') {
+    const grid = el('div', { class: 'grid2' });
+    const t = el('div', {}, el('h3', { text: 'Tests' }));
+    if (data.tests.length) {
+      const table = el('table');
+      table.append(el('tr', {}, el('th', { text: 'Suite' }), el('th', { text: 'OK' }), el('th', { text: 'Echec' }), el('th', { text: 'Date' })));
+      data.tests.forEach((r) => table.append(el('tr', {}, el('td', { text: r.suite }), el('td', { text: String(r.passed) }), el('td', { text: String(r.failed) }), el('td', { text: r.created_at.slice(0, 16) }))));
+      t.append(table);
+    } else t.append(el('div', { class: 'muted', text: 'Aucun test enregistre.' }));
+
+    const sec = el('div', {}, el('h3', { text: 'Securite' }));
+    if (data.security.length) {
+      const r = data.security[0];
+      let findings = [];
+      try { findings = JSON.parse(r.findings_json); } catch (e) {}
+      sec.append(el('div', { class: 'row', style: 'margin-bottom:8px' }, badgeFor(r.severity.toUpperCase()), el('span', { class: 'muted', text: `${findings.length} constat(s)` })));
+      if (findings.length) {
+        const table = el('table');
+        table.append(el('tr', {}, el('th', { text: 'Regle' }), el('th', { text: 'Fichier' }), el('th', { text: 'Gravite' })));
+        findings.slice(0, 20).forEach((f) => table.append(el('tr', {}, el('td', { text: f.rule }), el('td', { text: `${f.file}:${f.line}` }), el('td', { text: f.severity }))));
+        sec.append(table);
+      } else sec.append(el('div', { class: 'muted', text: 'Aucun constat.' }));
+    } else sec.append(el('div', { class: 'muted', text: 'Aucun scan.' }));
+    grid.append(t, sec);
+    panel.append(grid);
+
+    const builds = el('div', { style: 'margin-top:14px' }, el('h3', { text: 'Builds' }));
+    if (data.builds.length) builds.append(el('pre', { text: data.builds.map((b) => `${b.created_at.slice(0, 19)} ${b.platform}/${b.profile} -> ${b.status}\n  ${b.note || ''}`).join('\n') }));
+    else builds.append(el('div', { class: 'muted', text: 'Aucun build.' }));
+    panel.append(builds);
+  } else {
+    panel.append(el('h3', { text: 'Executions' }));
+    panel.append(el('pre', { text: data.runs.map((r) => `${r.command} -> ${r.exit_code} (${r.duration_ms} ms)`).join('\n') || 'Aucune commande executee.' }));
+  }
+  ws.append(panel);
+}
+
+$('newBtn').onclick = newProjectForm;
+
+(async function init() {
+  await api('/api/init', { method: 'GET' }).catch(() => {});
+  await loadState();
+  await loadProjects();
+})();
+</script>
+</body>
+</html>
