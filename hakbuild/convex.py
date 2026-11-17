@@ -19,7 +19,9 @@ def _fields(spec: str) -> list[str]:
 def ts_validator(field: str) -> str:
     low = field.lower()
     if low.endswith("id") and low != "id":
-        return 'v.id("users")'
+        # identifiants stockes comme chaines : evite les references croisees vers
+        # une table qui n'existe pas dans ce schema.
+        return "v.string()"
     if any(low.startswith(h) for h in NUMERIC_HINTS):
         return "v.number()"
     if any(low.startswith(h) for h in BOOL_HINTS):
@@ -67,14 +69,16 @@ def app_functions_ts(table: str, spec: str, auth_module: str = "./auth") -> str:
     for field in fields:
         if field in ("email",) and table == "users":
             continue
+        if field == "ownerId":
+            continue  # toujours derive de l'identite, jamais du client
         args.append(f"    {_safe(field)}: {ts_validator(field)},")
     args_block = "\n".join(args)
 
     guard = (
-        "  const identity = await ctx.auth.getUserIdentity();\n"
-        '  if (!identity) throw new Error("Non authentifie");\n'
+        "    const identity = await ctx.auth.getUserIdentity();\n"
+        '    if (!identity) throw new Error("Non authentifie");\n'
     )
-    owner = '  const ownerId = identity.subject;\n'
+    owner = '    const ownerId = identity.subject;\n'
 
     if table == "users":
         return (
