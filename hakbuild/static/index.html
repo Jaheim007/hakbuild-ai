@@ -256,6 +256,27 @@ function renderWorkspace(data) {
     await api('/api/advance', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id }) });
     await openProject(p.id);
   }, pending ? '' : 'primary'));
+  const verifyLine = el('div', { class: 'muted', style: 'font-size:12px;margin-top:8px' });
+  actions.append(actionButton('Verifier le build web', async () => {
+    verifyLine.textContent = 'Bundling Expo Web (peut prendre 1-3 min)…';
+    let res = await api('/api/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id }) });
+    if (res.status === 'missing_deps') {
+      if (!confirm('Les dependances npm manquent. Lancer npm install (plusieurs minutes) ?')) {
+        verifyLine.textContent = 'Verification annulee : dependances absentes.';
+        return;
+      }
+      verifyLine.textContent = 'npm install en cours…';
+      res = await api('/api/verify', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id, install: true }) });
+    }
+    if (res.exported) {
+      const appErrors = (res.tsc && res.tsc.app_errors) || [];
+      verifyLine.textContent = `Bundle OK : ${res.routes.length} routes, ${res.bundle || '?'}, ${appErrors.length} erreur(s) TS applicative(s).`;
+      verifyLine.style.color = appErrors.length ? 'var(--warn)' : 'var(--ok)';
+    } else {
+      verifyLine.textContent = 'Echec : ' + (res.error || res.detail || `exit ${res.exit_code}`);
+      verifyLine.style.color = 'var(--err)';
+    }
+  }));
   if (p.status === 'COMPLETED') {
     actions.append(actionButton('Regenerer le livrable', async () => {
       await api('/api/bundle', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id }) });
@@ -266,6 +287,7 @@ function renderWorkspace(data) {
     actions.append(dl);
   }
   ws.append(actions);
+  ws.append(verifyLine);
 
   const tabs = el('div', { class: 'tabs' });
   const tabDefs = [['prd', 'PRD'], ['tasks', 'Taches'], ['logs', 'Logs'], ['chat', 'Chat'], ['quality', 'Tests & Securite'], ['runs', 'Executions']];

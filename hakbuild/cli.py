@@ -170,6 +170,15 @@ def cmd_build(args) -> int:
     return 0
 
 
+def cmd_verify(args) -> int:
+    from . import verify
+
+    conn = _conn()
+    result = verify.verify_web(conn, args.id, install=args.install)
+    print(json.dumps(result, indent=2, ensure_ascii=False))
+    return 0 if result.get("ok") else 1
+
+
 def cmd_tickets(args) -> int:
     conn = _conn()
     project = db.get_project(conn, args.id)
@@ -251,6 +260,11 @@ def main(argv=None) -> int:
     p = sub.add_parser("bundle", help="construit le livrable ZIP")
     p.add_argument("id")
     p.set_defaults(func=cmd_build)
+
+    p = sub.add_parser("verify", help="valide le projet genere (expo export web + tsc)")
+    p.add_argument("id")
+    p.add_argument("--install", action="store_true", help="lance npm install si node_modules manque")
+    p.set_defaults(func=cmd_verify)
 
     p = sub.add_parser("serve", help="lance le dashboard web")
     p.add_argument("--host", default=config.settings().get("HOST", "127.0.0.1"))

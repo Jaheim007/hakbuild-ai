@@ -111,7 +111,7 @@ INDEX = """import { Link } from "expo-router";
 import { useQuery } from "convex/react";
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 
-import { api } from "../convex/_generated/api";
+import { api } from "../lib/api";
 import { convex } from "../lib/convex";
 import { theme } from "../constants/theme";
 
@@ -204,7 +204,7 @@ import { useMutation } from "convex/react";
 import { useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
-import { api } from "../convex/_generated/api";
+import { api } from "../lib/api";
 import { theme } from "../constants/theme";
 
 export default function CreateScreen() {
@@ -275,7 +275,7 @@ DETAIL = """import { useLocalSearchParams } from "expo-router";
 import { useQuery } from "convex/react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
-import { api } from "../../convex/_generated/api";
+import { api } from "../../lib/api";
 import { theme } from "../../constants/theme";
 
 export default function DetailScreen() {
@@ -358,6 +358,19 @@ web-build/
 .env.local
 .DS_Store
 /convex/_generated/
+"""
+
+LIB_API = """import { anyApi } from "convex/server";
+
+/**
+ * Reference de fonctions Convex.
+ *
+ * `anyApi` permet de bundler et de tester l'application avant qu'un deployment
+ * Convex n'existe. Apres `npx convex dev`, remplacer par :
+ *   import { api } from "../convex/_generated/api";
+ * pour obtenir le typage complet des fonctions.
+ */
+export const api = anyApi;
 """
 
 ENV_EXAMPLE = """# URL publique du deployment Convex (pas un secret)
@@ -480,6 +493,14 @@ def app_files(project: dict) -> dict[str, str]:
     files["lib/convex.ts"] = LIB_CONVEX
     files[".env.example"] = ENV_EXAMPLE
     files[".gitignore"] = GITIGNORE
+    files["lib/api.ts"] = LIB_API
+    files["babel.config.js"] = (
+        "module.exports = function (api) {\n"
+        "  api.cache(true);\n"
+        '  return { presets: ["babel-preset-expo"] };\n'
+        "};\n"
+    )
+    files["expo-env.d.ts"] = '/// <reference types="expo/types" />\n'
     files["convex/schema.ts"] = convex_mod.app_schema_ts(entities)
     files["convex/auth.config.ts"] = convex_mod.auth_config_ts()
     for table_name, spec_fields in entities:

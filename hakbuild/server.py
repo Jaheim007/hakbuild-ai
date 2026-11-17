@@ -273,6 +273,15 @@ class Handler(BaseHTTPRequestHandler):
                         return self._send_json({"error": "projet inconnu"}, 404)
                     path = evidence.build_bundle(self.conn, project_id)
                     return self._send_json({"bundle": str(path), "size": path.stat().st_size})
+
+                if parsed.path == "/api/verify":
+                    from . import verify
+
+                    project_id = data.get("id") or ""
+                    if db.get_project(self.conn, project_id) is None:
+                        return self._send_json({"error": "projet inconnu"}, 404)
+                    result = verify.verify_web(self.conn, project_id, install=bool(data.get("install")))
+                    return self._send_json(result)
         except Exception as exc:  # noqa: BLE001 - remonte au client sans secret
             return self._send_json({"error": str(exc), "type": type(exc).__name__}, 500)
 

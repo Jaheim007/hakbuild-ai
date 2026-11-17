@@ -103,6 +103,10 @@ class TestGenerators(Base):
         self.assertIn("export default", files["app/index.tsx"])
         self.assertIn("EXPO_PUBLIC_CONVEX_URL", files["lib/convex.ts"])
         self.assertNotIn("sk-", files["lib/convex.ts"])
+        # bundling sans deployment Convex : anyApi + babel requis
+        self.assertIn("anyApi", files["lib/api.ts"])
+        self.assertIn("babel-preset-expo", files["babel.config.js"])
+        self.assertNotIn("_generated", files["app/index.tsx"])
 
 
 class TestSecurity(Base):
@@ -188,6 +192,27 @@ class TestPipeline(Base):
             orch.run_until_blocked(max_steps=10)
             status = db.get_project(self.conn, project_id)["status"]
         self.assertEqual(status, "BLOCKED")
+
+
+class TestVerify(Base):
+    def test_missing_deps_is_reported_honestly(self):
+        from hakbuild import verify
+
+        project_id = cli.create_project(self.conn, "Verif", "idee simple", "android")
+        workspace = Path(db.get_project(self.conn, project_id)["workspace"])
+        (workspace / "package.json").write_text('{"name":"verif"}', encoding="utf-8")
+        result = verify.verify_web(self.conn, project_id)
+        self.assertFalse(result["ok"])
+        self.assertEqual(result.get("status"), "missing_deps")
+
+    def test_verify_without_package_json(self):
+        from hakbuild import verify
+
+        project_id = cli.create_project(self.conn, "Vide", "idee", "android")
+        (Path(db.get_project(self.conn, project_id)["workspace"]) / "package.json").unlink(missing_ok=True)
+        result = verify.verify_web(self.conn, project_id)
+        self.assertFalse(result["ok"])
+        self.assertIn("DEVELOPING", result["error"])
 
 
 class TestServer(Base):

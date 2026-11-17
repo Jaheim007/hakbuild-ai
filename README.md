@@ -14,6 +14,7 @@ python -m hakbuild.cli advance prj_xxxx                    # s'arrête sur la va
 python -m hakbuild.cli approve prj_xxxx                    # human gate
 python -m hakbuild.cli advance prj_xxxx                    # va jusqu'au build + bundle
 python -m hakbuild.cli bundle prj_xxxx                     # régénère le livrable
+python -m hakbuild.cli verify prj_xxxx --install            # bundle Expo Web + tsc réels
 python -m hakbuild.cli scan prj_xxxx                       # sécurité + checks
 python -m hakbuild.cli status                              # base, secrets, toolchain
 python run_tests.py                                        # 13 tests
