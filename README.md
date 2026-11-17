@@ -45,6 +45,20 @@ modifications. Chaque transition est journalisée dans `audit_logs`.
 | BUILDING | build enregistré (`planned` en dry-run, `succeeded`/`failed` en mode execute) |
 | COMPLETED | ZIP vérifié : PRD, source, rapports, inventaire SHA256 |
 
+## Preuve de compilation
+
+`python -m hakbuild.cli verify <id> --install` (ou bouton « Verifier le build web »
+du dashboard) lance réellement `npx expo export --platform web` puis `npx tsc --noEmit` :
+
+```
+ok: True | routes: index, create, profile, details/[id], +not-found
+bundle: entry-*.js (1.1 MB) | 0 erreur TS applicative
+```
+
+Sans deployment Convex, `convex/_generated` n'existe pas : les seules erreurs `tsc`
+sont dans `convex/*.ts` et disparaissent après `npx convex dev`. L'application
+elle-même (app/, lib/, constants/) n'en produit aucune.
+
 ## Modes de build
 
 - `BUILD_MODE=dry-run` (défaut) : le plan de commandes est enregistré, aucun APK n'est
@@ -68,9 +82,10 @@ modifications. Chaque transition est journalisée dans `audit_logs`.
 
 ## Limites connues
 
-- La compilation réelle exige un compte Expo/EAS (`EAS_TOKEN`) et Node 20+.
+- La compilation APK réelle exige un compte Expo/EAS (`EAS_TOKEN`) ; le bundling web
+  fonctionne sans compte (vérifié : 5 routes, 1.1 MB).
 - Les captures d'écran et les tests Maestro nécessitent un émulateur ou un appareil.
 - La création automatique de projets Convex via Platform APIs n'est pas branchée :
-  seuls les fichiers de schéma/fonctions sont générés.
+  seuls les fichiers de schéma/fonctions sont générés (`npx convex dev` requis).
 - Le PRD est déterministe (heuristiques) ; l'enrichissement par OpenRouter reste à brancher.
 - Pas de publication store (action humaine par conception).
