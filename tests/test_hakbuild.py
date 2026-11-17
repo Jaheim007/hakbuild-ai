@@ -275,6 +275,20 @@ class TestBuild(Base):
         self.assertEqual(result["status"], "blocked")
         self.assertTrue(result["blockers"])
 
+    def test_demo_fallback_without_convex(self):
+        files = scaffold.app_files({"name": "Demo", "idea": "reservation et paiement", "platforms": "android"})
+        backend = files["lib/backend.ts"]
+        self.assertIn("usingDemo", backend)
+        self.assertIn("useSyncExternalStore", backend)
+        self.assertIn("demoStore", files["lib/demoStore.ts"])
+        # plus d'ecran bloquant quand le backend n'est pas configure
+        self.assertNotIn("Configuration requise", files["app/index.tsx"])
+        self.assertIn("usingDemo", files["app/index.tsx"])
+        self.assertIn("useOne", files["app/details/[id].tsx"])
+        # l'entite principale est la premiere table metier, pas la derniere
+        table, _ = scaffold.main_entity({"name": "X", "idea": "reservation de creneaux avec paiement et messages"})
+        self.assertEqual(table, "bookings")
+
     def test_eas_env_bypasses_windows_git_clone(self):
         from hakbuild import build
 

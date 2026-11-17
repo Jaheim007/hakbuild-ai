@@ -81,57 +81,40 @@ import { convex } from "../lib/convex";
 import { theme } from "../constants/theme";
 
 export default function RootLayout() {
-  if (!convex) {
-    return (
-      <Stack screenOptions={{ headerShown: true, contentStyle: { backgroundColor: theme.colors.background } }}>
-        <Stack.Screen name="index" options={{ title: "Configuration requise" }} />
-      </Stack>
-    );
-  }
+  const navigation = (
+    <Stack
+      screenOptions={{
+        headerStyle: { backgroundColor: theme.colors.surface },
+        headerTintColor: theme.colors.text,
+        contentStyle: { backgroundColor: theme.colors.background },
+      }}
+    >
+      <Stack.Screen name="index" options={{ title: "$name" }} />
+      <Stack.Screen name="create" options={{ title: "Nouvel element" }} />
+      <Stack.Screen name="details/[id]" options={{ title: "Detail" }} />
+      <Stack.Screen name="profile" options={{ title: "Profil" }} />
+    </Stack>
+  );
+
   return (
-    <ConvexProvider client={convex}>
+    <>
       <StatusBar style="light" />
-      <Stack
-        screenOptions={{
-          headerStyle: { backgroundColor: theme.colors.surface },
-          headerTintColor: theme.colors.text,
-          contentStyle: { backgroundColor: theme.colors.background },
-        }}
-      >
-        <Stack.Screen name="index" options={{ title: "$name" }} />
-        <Stack.Screen name="create" options={{ title: "Nouvel element" }} />
-        <Stack.Screen name="details/[id]" options={{ title: "Detail" }} />
-        <Stack.Screen name="profile" options={{ title: "Profil" }} />
-      </Stack>
-    </ConvexProvider>
+      {convex ? <ConvexProvider client={convex}>{navigation}</ConvexProvider> : navigation}
+    </>
   );
 }
 """
 
 INDEX = """import { Link } from "expo-router";
-import { useQuery } from "convex/react";
 import { ActivityIndicator, FlatList, Pressable, StyleSheet, Text, View } from "react-native";
 
-import { api } from "../lib/api";
-import { convex } from "../lib/convex";
+import { useList, usingDemo } from "../lib/backend";
 import { theme } from "../constants/theme";
 
 export default function HomeScreen() {
-  if (!convex) {
-    return (
-      <View style={styles.center}>
-        <Text style={styles.title}>Configuration requise</Text>
-        <Text style={styles.muted}>
-          Definir EXPO_PUBLIC_CONVEX_URL dans .env puis relancer l'application.
-        </Text>
-      </View>
-    );
-  }
+  const items = useList();
 
-  const items = useQuery(api.$table.list);
-  const loading = items === undefined;
-
-  if (loading) {
+  if (items === undefined) {
     return (
       <View style={styles.center}>
         <ActivityIndicator color={theme.colors.primary} />
@@ -142,6 +125,11 @@ export default function HomeScreen() {
 
   return (
     <View style={styles.container}>
+      {usingDemo ? (
+        <Text style={styles.banner}>
+          Mode demo : donnees locales. Definir EXPO_PUBLIC_CONVEX_URL pour activer le backend.
+        </Text>
+      ) : null}
       {items.length === 0 ? (
         <View style={styles.center}>
           <Text style={styles.title}>Aucun element pour le moment</Text>
@@ -185,6 +173,16 @@ const styles = StyleSheet.create({
     gap: 4,
   },
   cardTitle: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: "600" },
+  banner: {
+    color: theme.colors.muted,
+    backgroundColor: theme.colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: theme.colors.border,
+    fontSize: 12,
+    paddingHorizontal: theme.spacing.md,
+    paddingVertical: theme.spacing.sm,
+    textAlign: "center",
+  },
   fab: {
     position: "absolute",
     right: theme.spacing.lg,
@@ -201,15 +199,14 @@ const styles = StyleSheet.create({
 """
 
 CREATE = """import { router } from "expo-router";
-import { useMutation } from "convex/react";
 import { useState } from "react";
 import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
 
-import { api } from "../lib/api";
+import { useCreate } from "../lib/backend";
 import { theme } from "../constants/theme";
 
 export default function CreateScreen() {
-  const create$Entity = useMutation(api.$table.create);
+  const createItem = useCreate();
   const [value, setValue] = useState("");
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -222,7 +219,7 @@ export default function CreateScreen() {
     setSaving(true);
     setError(null);
     try {
-      await create$Entity({ $titleField: value.trim() });
+      await createItem({ $titleField: value.trim() });
       router.back();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Echec de l'enregistrement.");
@@ -273,15 +270,14 @@ const styles = StyleSheet.create({
 """
 
 DETAIL = """import { useLocalSearchParams } from "expo-router";
-import { useQuery } from "convex/react";
 import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 
-import { api } from "../../lib/api";
+import { useOne } from "../../lib/backend";
 import { theme } from "../../constants/theme";
 
 export default function DetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
-  const item = useQuery(api.$table.get, id ? { id: id as never } : "skip");
+  const item = useOne(id);
 
   if (item === undefined) {
     return (
@@ -338,6 +334,84 @@ const styles = StyleSheet.create({
 });
 """
 
+DEMO_STORE = """type Row = { _id: string; _creationTime: number; [key: string]: unknown };
+
+let rows: Row[] = [];
+const listeners = new Set<() => void>();
+
+/**
+ * Mode demo : le stockage local permet de tester l'application sans deployment
+ * Convex. Les donnees ne survivent pas au redemarrage de l'application.
+ */
+export const demoStore = {
+  subscribe(listener: () => void) {
+    listeners.add(listener);
+    return () => {
+      listeners.delete(listener);
+    };
+  },
+  getSnapshot(): Row[] {
+    return rows;
+  },
+  add(fields: Record<string, unknown>): string {
+    const row: Row = {
+      _id: `demo-${Date.now()}`,
+      _creationTime: Date.now(),
+      ownerId: "demo",
+      ...fields,
+    };
+    rows = [row, ...rows];
+    listeners.forEach((listener) => listener());
+    return row._id;
+  },
+};
+"""
+
+BACKEND = """import { useMutation, useQuery } from "convex/react";
+import { useSyncExternalStore } from "react";
+
+import { api } from "./api";
+import { convex } from "./convex";
+import { demoStore } from "./demoStore";
+
+/**
+ * Sans deployment Convex (EXPO_PUBLIC_CONVEX_URL absent), l'application bascule
+ * en mode demo : les ecrans restent utilisables avec un stockage local.
+ * `usingDemo` est une constante de module, donc l'ordre des hooks ne change jamais.
+ */
+export const usingDemo = !convex;
+
+export type Row = { _id: string; _creationTime: number; [key: string]: unknown };
+
+export function useList(): Row[] | undefined {
+  if (usingDemo) {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    return useSyncExternalStore(demoStore.subscribe, demoStore.getSnapshot);
+  }
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  return useQuery(api.$table.list) as Row[] | undefined;
+}
+
+export function useOne(id: string | undefined): Row | undefined {
+  if (usingDemo) {
+    // eslint-disable-next-line react-hooks/rules-of-hooks
+    const rows = useSyncExternalStore(demoStore.subscribe, demoStore.getSnapshot);
+    return rows.find((row) => row._id === id);
+  }
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  return useQuery(api.$table.get, id ? { id: id as never } : "skip") as Row | undefined;
+}
+
+export function useCreate() {
+  if (usingDemo) {
+    return async (fields: Record<string, unknown>) => demoStore.add(fields);
+  }
+  // eslint-disable-next-line react-hooks/rules-of-hooks
+  const create = useMutation(api.$table.create);
+  return (fields: Record<string, unknown>) => create(fields as never);
+}
+"""
+
 LIB_CONVEX = """import { ConvexReactClient } from "convex/react";
 
 const url = process.env.EXPO_PUBLIC_CONVEX_URL;
@@ -392,7 +466,7 @@ def _pascal(name: str) -> str:
 def main_entity(project: dict) -> tuple[str, str]:
     entities = prd_mod.entities_for(project.get("idea") or "")
     candidates = [e for e in entities if e[0] != "users"]
-    return candidates[-1] if candidates else ("items", "title, description, ownerId")
+    return candidates[0] if candidates else ("items", "title, description, ownerId")
 
 
 def app_files(project: dict) -> dict[str, str]:
@@ -400,7 +474,10 @@ def app_files(project: dict) -> dict[str, str]:
     slug = _slug(name)
     table, spec = main_entity(project)
     fields = [f.strip() for f in spec.split(",") if f.strip()]
-    title_field = next((f for f in fields if f in ("title", "name", "label", "email", "patientName")), fields[0])
+    title_field = next(
+        (f for f in fields if f in ("title", "name", "label", "subject", "customerName", "patientName", "email")),
+        fields[0],
+    )
     label = table.rstrip("s")
     entities = prd_mod.entities_for(project.get("idea") or "")
 
@@ -494,6 +571,8 @@ def app_files(project: dict) -> dict[str, str]:
     files["app/details/[id].tsx"] = Template(DETAIL).substitute(table=table, titleField=title_field)
     files["app/profile.tsx"] = PROFILE
     files["lib/convex.ts"] = LIB_CONVEX
+    files["lib/demoStore.ts"] = DEMO_STORE
+    files["lib/backend.ts"] = Template(BACKEND).substitute(table=table)
     files[".env.example"] = ENV_EXAMPLE
     files[".gitignore"] = GITIGNORE
     files[".easignore"] = (
