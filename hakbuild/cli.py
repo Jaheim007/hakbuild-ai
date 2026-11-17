@@ -206,6 +206,18 @@ def cmd_build_status(args) -> int:
     return 0 if result.get("ok") else 1
 
 
+def cmd_github(args) -> int:
+    from . import github
+
+    conn = _conn()
+    if args.check:
+        print(json.dumps(github.available(conn), indent=2, ensure_ascii=False))
+        return 0
+    result = github.push_project(conn, args.id, name=args.name, private=not args.public)
+    print(json.dumps(result, indent=2, ensure_ascii=False))
+    return 0 if result.get("ok") else 1
+
+
 def cmd_tickets(args) -> int:
     conn = _conn()
     project = db.get_project(conn, args.id)
@@ -307,6 +319,13 @@ def main(argv=None) -> int:
     p = sub.add_parser("build-status", help="etat du dernier build EAS (et URL de l'APK)")
     p.add_argument("id")
     p.set_defaults(func=cmd_build_status)
+
+    p = sub.add_parser("github", help="pousse le projet sur un depot GitHub prive")
+    p.add_argument("id", nargs="?", default="")
+    p.add_argument("--name", default=None, help="nom du depot (defaut: slug du projet)")
+    p.add_argument("--public", action="store_true", help="depot public (prive par defaut)")
+    p.add_argument("--check", action="store_true", help="verifie seulement l'authentification gh")
+    p.set_defaults(func=cmd_github)
 
     p = sub.add_parser("serve", help="lance le dashboard web")
     p.add_argument("--host", default=config.settings().get("HOST", "127.0.0.1"))

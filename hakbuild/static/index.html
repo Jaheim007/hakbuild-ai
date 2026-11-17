@@ -305,6 +305,21 @@ function renderWorkspace(data) {
   ws.append(actions);
   ws.append(verifyLine);
   ws.append(apkLine);
+  const ghLine = el('div', { class: 'muted', style: 'font-size:12px;margin-top:4px' });
+  if (p.status === 'COMPLETED') {
+    actions.append(actionButton('Publier sur GitHub', async () => {
+      ghLine.textContent = 'Creation du depot prive…';
+      const res = await api('/api/github', { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ id: p.id, private: true }) });
+      if (res.ok) {
+        ghLine.textContent = 'Depot : ' + res.url;
+        ghLine.style.color = 'var(--ok)';
+      } else {
+        ghLine.textContent = 'Echec : ' + (res.error || res.status);
+        ghLine.style.color = 'var(--err)';
+      }
+    }));
+  }
+  ws.append(ghLine);
 
   const tabs = el('div', { class: 'tabs' });
   const tabDefs = [['prd', 'PRD'], ['tasks', 'Taches'], ['logs', 'Logs'], ['chat', 'Chat'], ['quality', 'Tests & Securite'], ['runs', 'Executions']];

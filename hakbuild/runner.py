@@ -18,6 +18,7 @@ ALLOWED_PREFIXES = (
     "npm ",
     "node ",
     "git ",
+    "gh ",
     "python ",
     "python3 ",
     "expo ",
@@ -46,7 +47,10 @@ def run(conn, project_id: str, command: str, cwd: Path, timeout: int = DEFAULT_T
         raise CommandRefused(f"commande hors liste blanche: {command}")
 
     executable = command.split()[0]
-    if shutil.which(executable) is None:
+    child_env = dict(os.environ)
+    if env:
+        child_env.update({k: v for k, v in env.items() if v})
+    if shutil.which(executable, path=child_env.get("PATH")) is None:
         result = {
             "id": new_id("run"),
             "command": command,
@@ -60,9 +64,6 @@ def run(conn, project_id: str, command: str, cwd: Path, timeout: int = DEFAULT_T
         return result
 
     started = time.time()
-    child_env = dict(os.environ)
-    if env:
-        child_env.update({k: v for k, v in env.items() if v})
     try:
         proc = subprocess.run(
             command,

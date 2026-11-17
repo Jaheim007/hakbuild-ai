@@ -293,6 +293,28 @@ class TestBuild(Base):
             self.assertIn(pattern, ignore)
 
 
+class TestGithub(Base):
+    def test_repo_name_slug(self):
+        from hakbuild import github
+
+        self.assertEqual(github.repo_name({"name": "Barber Pro!"}), "barber-pro")
+        self.assertEqual(github.repo_name({"name": "  "}), "app")
+
+    def test_gh_discovery_and_env(self):
+        from hakbuild import github
+
+        directory = github.gh_dir()
+        self.assertIsNotNone(directory, "gh introuvable (attendu: ~/gh-portable/bin/gh.exe)")
+        self.assertIn("PATH", github.gh_env())
+
+    def test_push_unknown_project(self):
+        from hakbuild import github
+
+        result = github.push_project(self.conn, "prj_inconnu")
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["error"], "projet inconnu")
+
+
 class TestServer(Base):
     def test_api_endpoints(self):
         httpd = server.make_server(self.conn, "127.0.0.1", 0)

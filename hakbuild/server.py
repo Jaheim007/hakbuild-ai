@@ -310,6 +310,19 @@ class Handler(BaseHTTPRequestHandler):
 
                     project_id = data.get("id") or ""
                     return self._send_json(build.refresh_build(self.conn, project_id))
+
+                if parsed.path == "/api/github":
+                    from . import github
+
+                    project_id = data.get("id") or ""
+                    if db.get_project(self.conn, project_id) is None:
+                        return self._send_json({"error": "projet inconnu"}, 404)
+                    result = github.push_project(
+                        self.conn, project_id,
+                        name=data.get("name") or None,
+                        private=bool(data.get("private", True)),
+                    )
+                    return self._send_json(result)
         except Exception as exc:  # noqa: BLE001 - remonte au client sans secret
             return self._send_json({"error": str(exc), "type": type(exc).__name__}, 500)
 
