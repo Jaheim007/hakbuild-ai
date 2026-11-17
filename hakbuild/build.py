@@ -106,7 +106,8 @@ def _eas_init(conn, project_id: str, workspace: Path) -> tuple[bool, str]:
     return result["exit_code"] == 0, result["output"][-600:]
 
 
-def build_apk(conn, project_id: str, profile: str = "preview", execute: bool | None = None) -> dict:
+def build_apk(conn, project_id: str, profile: str = "preview", execute: bool | None = None,
+              wait: bool = False) -> dict:
     state = preflight(conn, project_id)
     workspace = Path(state["workspace"])
     if not token():
@@ -126,6 +127,8 @@ def build_apk(conn, project_id: str, profile: str = "preview", execute: bool | N
             return {"ok": False, "status": "eas_init_failed", "output": output, "blockers": state["blockers"]}
 
     command = f"npx eas-cli build --platform android --profile {profile} --non-interactive"
+    if not wait:
+        command += " --no-wait"
     if not execute:
         db.log(conn, f"APK pret (BUILD_MODE dry-run) : {command}", project_id)
         return {
@@ -136,24 +139,77 @@ def build_apk(conn, project_id: str, profile: str = "preview", execute: bool | N
             "preflight": preflight(conn, project_id),
         }
 
-    run = runner.run(conn, project_id, command, workspace, timeout=3600, env={"EXPO_TOKEN": token() or ""})
+    run = runner.run(
+        conn, project_id, command, workspace, timeout=3600,
+        env={"EXPO_TOKEN": token() or "", **eas_env()},
+    )
     match = BUILD_URL.search(run["output"])
+    build_url = match.group(0) if match else None
+    eas_build_id = build_url.rstrip("/").split("/")[-1] if build_url else None
     build_id = db.new_id("bld")
     status = "queued" if run["exit_code"] == 0 else "failed"
     conn.execute(
         "INSERT INTO builds (id, project_id, platform, profile, status, artifact_path, note, created_at, updated_at)"
         " VALUES (?, ?, 'android', ?, ?, ?, ?, ?, ?)",
-        (build_id, project_id, profile, status, match.group(0) if match else None,
-         f"EAS exit {run['exit_code']} : {run['output'][-400:]}", db.now(), db.now()),
+        (build_id, project_id, profile, status, eas_build_id,
+         f"EAS exit {run['exit_code']} | url={build_url} | {run['output'][-400:]}", db.now(), db.now()),
     )
     conn.commit()
     db.log(conn, f"EAS build {status} (exit {run['exit_code']})", project_id, "info" if run["exit_code"] == 0 else "error")
     return {
         "ok": run["exit_code"] == 0,
         "status": status,
-        "build_url": match.group(0) if match else None,
+        "build_url": build_url,
+        "eas_build_id": eas_build_id,
         "exit_code": run["exit_code"],
         "output_tail": run["output"][-1500:],
+    }
+
+
+def refresh_build(conn, project_id: str) -> dict:
+    """Interroge EAS pour l'etat du dernier build et met a jour la base."""
+    row = conn.execute(
+        "SELECT id, artifact_path, status FROM builds WHERE project_id = ? AND artifact_path IS NOT NULL"
+        " ORDER BY created_at DESC LIMIT 1",
+        (project_id,),
+    ).fetchone()
+    if row is None:
+        return {"ok": False, "error": "aucun build EAS enregistre"}
+    eas_id = row["artifact_path"]
+    project = db.get_project(conn, project_id)
+    result = runner.run(
+        conn,
+        project_id,
+        f"npx eas-cli build:view {eas_id} --json",
+        Path(project["workspace"]),
+        timeout=180,
+        env={"EXPO_TOKEN": token() or ""},
+    )
+    payload = None
+    match = re.search(r"\{[\s\S]*\}", result["output"])
+    if match:
+        try:
+            payload = json.loads(match.group(0))
+        except json.JSONDecodeError:
+            payload = None
+    if payload is None:
+        return {"ok": False, "error": "reponse EAS illisible", "output_tail": result["output"][-600:]}
+
+    status = payload.get("status") or "unknown"
+    artifact = (payload.get("artifacts") or {}).get("buildUrl")
+    conn.execute(
+        "UPDATE builds SET status = ?, note = ?, updated_at = ? WHERE id = ?",
+        (status, f"url={payload.get('webPageUrl') or ''} | artifact={artifact or ''}", db.now(), row["id"]),
+    )
+    conn.commit()
+    db.log(conn, f"EAS build {eas_id}: {status}", project_id)
+    return {
+        "ok": True,
+        "status": status,
+        "artifact_url": artifact,
+        "web_page": payload.get("webPageUrl"),
+        "platform": payload.get("platform"),
+        "profile": (payload.get("buildProfile") or None),
     }
 
 
@@ -177,3 +233,16 @@ def env_with_token() -> dict:
     base = {"EXPO_TOKEN": token() or ""} if token() else {}
     base.update({"CI": os.environ.get("CI", "1")})
     return base
+
+
+def eas_env() -> dict:
+    """Contourne l'archivage git d'EAS CLI sur Windows.
+
+    `git clone file:///C:/...` echoue dans cet environnement (chemin converti en
+    `/C:/...`) ; EAS_NO_VCS=1 fait archiver le dossier directement, en respectant
+    `.easignore`. Desactivable avec HAKBUILD_EAS_NO_VCS=0.
+    """
+    env = {"CI": "1"}
+    if os.environ.get("HAKBUILD_EAS_NO_VCS", "1") != "0":
+        env["EAS_NO_VCS"] = "1"
+    return env

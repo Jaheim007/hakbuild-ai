@@ -301,8 +301,15 @@ class Handler(BaseHTTPRequestHandler):
                         self.conn, project_id,
                         profile=data.get("profile") or "preview",
                         execute=bool(data.get("execute")),
+                        wait=bool(data.get("wait")),
                     )
                     return self._send_json(result)
+
+                if parsed.path == "/api/build-status":
+                    from . import build
+
+                    project_id = data.get("id") or ""
+                    return self._send_json(build.refresh_build(self.conn, project_id))
         except Exception as exc:  # noqa: BLE001 - remonte au client sans secret
             return self._send_json({"error": str(exc), "type": type(exc).__name__}, 500)
 

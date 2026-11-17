@@ -19,11 +19,18 @@ class Base(unittest.TestCase):
         root = Path(self.tmp.name)
         os.environ["DATA_DIR"] = str(root / "data")
         os.environ["DATABASE_URL"] = f"sqlite:///{(root / 'test.db').as_posix()}"
+        # isoler les tests du .env reel (aucun secret ne doit fuiter dans les assertions)
+        self._env_file = config.ENV_FILE
+        config.ENV_FILE = root / ".env"
+        config.ENV_FILE.write_text("# test env\n", encoding="utf-8")
+        for key in ("EXPO_TOKEN", "EAS_TOKEN", "OPENROUTER_API_KEY", "GITHUB_TOKEN", "CONVEX_DEPLOY_KEY"):
+            os.environ.pop(key, None)
         self.conn = db.connect()
         db.migrate(self.conn)
 
     def tearDown(self):
         self.conn.close()
+        config.ENV_FILE = self._env_file
         self.tmp.cleanup()
         os.environ.pop("DATA_DIR", None)
         os.environ.pop("DATABASE_URL", None)
@@ -264,6 +271,23 @@ class TestBuild(Base):
         self.assertFalse(result["ok"])
         self.assertEqual(result["status"], "blocked")
         self.assertTrue(result["blockers"])
+
+    def test_eas_env_bypasses_windows_git_clone(self):
+        from hakbuild import build
+
+        os.environ.pop("HAKBUILD_EAS_NO_VCS", None)
+        self.assertEqual(build.eas_env().get("EAS_NO_VCS"), "1")
+        os.environ["HAKBUILD_EAS_NO_VCS"] = "0"
+        try:
+            self.assertNotIn("EAS_NO_VCS", build.eas_env())
+        finally:
+            os.environ.pop("HAKBUILD_EAS_NO_VCS", None)
+
+    def test_easignore_excludes_heavy_dirs(self):
+        files = scaffold.app_files({"name": "Ignore", "idea": "reservation", "platforms": "android"})
+        ignore = files[".easignore"]
+        for pattern in ("node_modules/", "dist/", ".git/", ".env"):
+            self.assertIn(pattern, ignore)
 
 
 class TestServer(Base):

@@ -496,6 +496,14 @@ def app_files(project: dict) -> dict[str, str]:
     files["lib/convex.ts"] = LIB_CONVEX
     files[".env.example"] = ENV_EXAMPLE
     files[".gitignore"] = GITIGNORE
+    files[".easignore"] = (
+        "node_modules/\n"
+        "dist/\n"
+        ".expo/\n"
+        ".git/\n"
+        "*.log\n"
+        ".env\n"
+    )
     files["lib/api.ts"] = LIB_API
     files["eas.json"] = _eas_json()
     files["babel.config.js"] = (

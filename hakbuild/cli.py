@@ -192,7 +192,16 @@ def cmd_apk(args) -> int:
     from . import build
 
     conn = _conn()
-    result = build.build_apk(conn, args.id, profile=args.profile, execute=args.execute)
+    result = build.build_apk(conn, args.id, profile=args.profile, execute=args.execute, wait=args.wait)
+    print(json.dumps(result, indent=2, ensure_ascii=False))
+    return 0 if result.get("ok") else 1
+
+
+def cmd_build_status(args) -> int:
+    from . import build
+
+    conn = _conn()
+    result = build.refresh_build(conn, args.id)
     print(json.dumps(result, indent=2, ensure_ascii=False))
     return 0 if result.get("ok") else 1
 
@@ -292,7 +301,12 @@ def main(argv=None) -> int:
     p.add_argument("id")
     p.add_argument("--profile", default="preview", choices=["development", "preview", "production"])
     p.add_argument("--execute", action="store_true", help="lance EAS reellement (sinon BUILD_MODE)")
+    p.add_argument("--wait", action="store_true", help="attend la fin du build au lieu de rendre la main")
     p.set_defaults(func=cmd_apk)
+
+    p = sub.add_parser("build-status", help="etat du dernier build EAS (et URL de l'APK)")
+    p.add_argument("id")
+    p.set_defaults(func=cmd_build_status)
 
     p = sub.add_parser("serve", help="lance le dashboard web")
     p.add_argument("--host", default=config.settings().get("HOST", "127.0.0.1"))
