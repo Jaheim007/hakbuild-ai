@@ -75,6 +75,21 @@ et n'est jamais passé en argument de commande ni affiché : `runner.run(env=...
 l'environnement du processus enfant. Sans jeton, `apk --execute` répond `blocked` avec
 la liste des blocages — aucun succès simulé.
 
+## GitHub
+
+Dépôt de la plateforme : **https://github.com/durand225/hakbuild-ai** (privé, `main`).
+`.env`, `data/` et les bases SQLite sont exclus par `.gitignore` — vérifié : `contents/.env` renvoie 404.
+
+```bash
+python -m hakbuild.cli github --check        # gh installe + authentifie
+python -m hakbuild.cli github <id>           # depot prive <slug> pour le projet genere
+python -m hakbuild.cli github <id> --public  # depot public
+```
+
+`hakbuild/github.py` crée le dépôt (`gh repo create --private --source=. --remote=origin --push`),
+enregistre `projects.repo_url` + une ligne `repositories`, et journalise l'action. Le compte
+utilisé est celui du credential store `gh` (`durand225`), aucun jeton passé en argument.
+
 ## Modes de build
 
 - `BUILD_MODE=dry-run` (défaut) : le plan de commandes est enregistré, aucun APK n'est
