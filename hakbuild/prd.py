@@ -33,7 +33,7 @@ ENTITY_MAP = {
 
 DEFAULT_ENTITIES = [
     ("users", "email, displayName, role"),
-    ("items", "title, description, ownerId, createdAt"),
+    ("items", "title, description, ownerId"),
 ]
 
 

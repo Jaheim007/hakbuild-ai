@@ -218,6 +218,19 @@ def cmd_github(args) -> int:
     return 0 if result.get("ok") else 1
 
 
+def cmd_convex_deploy(args) -> int:
+    from . import convex_deploy
+
+    conn = _conn()
+    if args.status:
+        print(json.dumps(convex_deploy.status(conn, args.id), indent=2, ensure_ascii=False)
+              if args.id else json.dumps({"key_present": bool(convex_deploy.deploy_key())}, indent=2))
+        return 0
+    result = convex_deploy.deploy(conn, args.id)
+    print(json.dumps(result, indent=2, ensure_ascii=False))
+    return 0 if result.get("ok") else 1
+
+
 def cmd_tickets(args) -> int:
     conn = _conn()
     project = db.get_project(conn, args.id)
@@ -326,6 +339,11 @@ def main(argv=None) -> int:
     p.add_argument("--public", action="store_true", help="depot public (prive par defaut)")
     p.add_argument("--check", action="store_true", help="verifie seulement l'authentification gh")
     p.set_defaults(func=cmd_github)
+
+    p = sub.add_parser("convex-deploy", help="deploie le backend Convex de l'application generee")
+    p.add_argument("id", nargs="?", default="")
+    p.add_argument("--status", action="store_true", help="etat du backend sans deployer")
+    p.set_defaults(func=cmd_convex_deploy)
 
     p = sub.add_parser("serve", help="lance le dashboard web")
     p.add_argument("--host", default=config.settings().get("HOST", "127.0.0.1"))

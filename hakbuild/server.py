@@ -323,6 +323,16 @@ class Handler(BaseHTTPRequestHandler):
                         private=bool(data.get("private", True)),
                     )
                     return self._send_json(result)
+
+                if parsed.path == "/api/convex":
+                    from . import convex_deploy
+
+                    project_id = data.get("id") or ""
+                    if db.get_project(self.conn, project_id) is None:
+                        return self._send_json({"error": "projet inconnu"}, 404)
+                    if data.get("status"):
+                        return self._send_json(convex_deploy.status(self.conn, project_id))
+                    return self._send_json(convex_deploy.deploy(self.conn, project_id))
         except Exception as exc:  # noqa: BLE001 - remonte au client sans secret
             return self._send_json({"error": str(exc), "type": type(exc).__name__}, 500)
 

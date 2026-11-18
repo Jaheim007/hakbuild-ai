@@ -90,8 +90,8 @@ export default function RootLayout() {
       }}
     >
       <Stack.Screen name="index" options={{ title: "$name" }} />
-      <Stack.Screen name="create" options={{ title: "Nouvel element" }} />
-      <Stack.Screen name="details/[id]" options={{ title: "Detail" }} />
+      <Stack.Screen name="create" options={{ title: "Nouvel élément" }} />
+      <Stack.Screen name="details/[id]" options={{ title: "Détail" }} />
       <Stack.Screen name="profile" options={{ title: "Profil" }} />
     </Stack>
   );
@@ -118,7 +118,7 @@ export default function HomeScreen() {
     return (
       <View style={styles.center}>
         <ActivityIndicator color={theme.colors.primary} />
-        <Text style={styles.muted}>Chargement...</Text>
+        <Text style={styles.muted}>Chargement…</Text>
       </View>
     );
   }
@@ -127,13 +127,13 @@ export default function HomeScreen() {
     <View style={styles.container}>
       {usingDemo ? (
         <Text style={styles.banner}>
-          Mode demo : donnees locales. Definir EXPO_PUBLIC_CONVEX_URL pour activer le backend.
+          Mode démo : données locales. Définir EXPO_PUBLIC_CONVEX_URL pour activer le backend.
         </Text>
       ) : null}
       {items.length === 0 ? (
         <View style={styles.center}>
-          <Text style={styles.title}>Aucun element pour le moment</Text>
-          <Text style={styles.muted}>Commencez par creer votre premier $label.</Text>
+          <Text style={styles.title}>Aucun élément pour le moment</Text>
+          <Text style={styles.muted}>Commencez par créer votre premier $label.</Text>
         </View>
       ) : (
         <FlatList
@@ -200,26 +200,42 @@ const styles = StyleSheet.create({
 
 CREATE = """import { router } from "expo-router";
 import { useState } from "react";
-import { ActivityIndicator, Pressable, StyleSheet, Text, TextInput, View } from "react-native";
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, TextInput, View } from "react-native";
 
 import { useCreate } from "../lib/backend";
 import { theme } from "../constants/theme";
 
+type Field = { key: string; label: string; numeric?: boolean; required?: boolean };
+
+/** Champs generes depuis le schema Convex de l'application. */
+const FIELDS: Field[] = [
+$fields
+];
+
 export default function CreateScreen() {
   const createItem = useCreate();
-  const [value, setValue] = useState("");
+  const [form, setForm] = useState<Record<string, string>>({});
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   async function submit() {
-    if (!value.trim()) {
-      setError("Le champ principal est obligatoire.");
-      return;
+    const payload: Record<string, unknown> = {};
+    for (const field of FIELDS) {
+      const raw = (form[field.key] ?? "").trim();
+      if (field.required && !raw) {
+        setError("Le champ « " + field.label + " » est obligatoire.");
+        return;
+      }
+      if (field.numeric && raw && Number.isNaN(Number(raw))) {
+        setError("« " + field.label + " » doit etre un nombre.");
+        return;
+      }
+      payload[field.key] = field.numeric ? Number(raw || "0") : raw;
     }
     setSaving(true);
     setError(null);
     try {
-      await createItem({ $titleField: value.trim() });
+      await createItem(payload);
       router.back();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Echec de l'enregistrement.");
@@ -229,26 +245,35 @@ export default function CreateScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <Text style={styles.label}>$titleLabel</Text>
-      <TextInput
-        style={styles.input}
-        value={value}
-        onChangeText={setValue}
-        placeholder="Saisir une valeur"
-        placeholderTextColor={theme.colors.muted}
-      />
+    <ScrollView style={styles.screen} contentContainerStyle={styles.container}>
+      {FIELDS.map((field) => (
+        <View key={field.key}>
+          <Text style={styles.label}>
+            {field.label}
+            {field.required ? " *" : ""}
+          </Text>
+          <TextInput
+            style={styles.input}
+            value={form[field.key] ?? ""}
+            onChangeText={(text) => setForm((prev) => ({ ...prev, [field.key]: text }))}
+            placeholder={field.label}
+            placeholderTextColor={theme.colors.muted}
+            keyboardType={field.numeric ? "numeric" : "default"}
+          />
+        </View>
+      ))}
       {error ? <Text style={styles.error}>{error}</Text> : null}
       <Pressable style={styles.button} onPress={submit} disabled={saving}>
         {saving ? <ActivityIndicator color="#fff" /> : <Text style={styles.buttonText}>Enregistrer</Text>}
       </Pressable>
-    </View>
+    </ScrollView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: theme.colors.background, padding: theme.spacing.lg, gap: theme.spacing.md },
-  label: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: "600" },
+  screen: { flex: 1, backgroundColor: theme.colors.background },
+  container: { padding: theme.spacing.lg, gap: theme.spacing.md },
+  label: { color: theme.colors.text, fontSize: theme.font.body, fontWeight: "600", marginBottom: 6 },
   input: {
     backgroundColor: theme.colors.surface,
     borderColor: theme.colors.border,
@@ -275,6 +300,11 @@ import { ActivityIndicator, StyleSheet, Text, View } from "react-native";
 import { useOne } from "../../lib/backend";
 import { theme } from "../../constants/theme";
 
+/** Libelles lisibles des champs du schema. */
+const LABELS: Record<string, string> = {
+$labels
+};
+
 export default function DetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const item = useOne(id);
@@ -291,11 +321,11 @@ export default function DetailScreen() {
     <View style={styles.container}>
       <Text style={styles.title}>{String(item.$titleField ?? "Detail")}</Text>
       {Object.entries(item)
-        .filter(([key]) => !key.startsWith("_") && key !== "ownerId")
+        .filter(([key]) => !key.startsWith("_") && key !== "ownerId" && key !== "$titleField")
         .map(([key, value]) => (
           <View key={key} style={styles.row}>
-            <Text style={styles.key}>{key}</Text>
-            <Text style={styles.value}>{String(value)}</Text>
+            <Text style={styles.key}>{LABELS[key] ?? key}</Text>
+            <Text style={styles.value}>{String(value) || "-"}</Text>
           </View>
         ))}
     </View>
@@ -454,6 +484,65 @@ EXPO_PUBLIC_CONVEX_URL=https://<deployment>.convex.cloud
 """
 
 
+FIELD_LABELS = {
+    "customerName": "Client",
+    "patientName": "Patient",
+    "doctorName": "Médecin",
+    "scheduledAt": "Rendez-vous le",
+    "date": "Date",
+    "slot": "Créneau",
+    "status": "Statut",
+    "title": "Titre",
+    "name": "Nom",
+    "label": "Libellé",
+    "subject": "Objet",
+    "description": "Description",
+    "notes": "Notes",
+    "amount": "Montant",
+    "price": "Prix",
+    "total": "Total",
+    "currency": "Devise",
+    "provider": "Moyen de paiement",
+    "reference": "Référence",
+    "stock": "Stock",
+    "quantity": "Quantité",
+    "body": "Message",
+    "threadId": "Conversation",
+    "authorId": "Auteur",
+    "readAt": "Lu le",
+    "items": "Articles",
+    "address": "Adresse",
+    "city": "Ville",
+    "imageUrl": "Image (URL)",
+    "email": "Email",
+    "role": "Rôle",
+    "displayName": "Nom affiché",
+    "class": "Classe",
+    "grades": "Notes",
+}
+
+
+def create_fields(fields: list[str]) -> str:
+    lines = []
+    for field in fields:
+        if field == "ownerId":
+            continue
+        numeric = convex_mod.ts_validator(field) == "v.number()"
+        label = FIELD_LABELS.get(field, field)
+        required = field != "status" and not field.endswith("Id")
+        lines.append(
+            f'  {{ key: "{field}", label: "{label}", numeric: '
+            f'{"true" if numeric else "false"}, required: {"true" if required else "false"} }},'
+        )
+    return "\n".join(lines)
+
+
+def field_labels_block(fields: list[str]) -> str:
+    return "\n".join(
+        f'  {field}: "{FIELD_LABELS.get(field, field)}",' for field in fields if field != "ownerId"
+    )
+
+
 def _slug(name: str) -> str:
     slug = re.sub(r"[^a-z0-9]+", "-", (name or "app").lower()).strip("-")
     return slug or "app"
@@ -562,13 +651,10 @@ def app_files(project: dict) -> dict[str, str]:
     files["app/index.tsx"] = Template(INDEX).substitute(
         table=table, label=label, titleField=title_field
     )
-    files["app/create.tsx"] = Template(CREATE).substitute(
-        table=table,
-        Entity=_pascal(table),
-        titleField=title_field,
-        titleLabel=f"{title_field} du {label}",
+    files["app/create.tsx"] = Template(CREATE).substitute(fields=create_fields(fields))
+    files["app/details/[id].tsx"] = Template(DETAIL).substitute(
+        table=table, titleField=title_field, labels=field_labels_block(fields)
     )
-    files["app/details/[id].tsx"] = Template(DETAIL).substitute(table=table, titleField=title_field)
     files["app/profile.tsx"] = PROFILE
     files["lib/convex.ts"] = LIB_CONVEX
     files["lib/demoStore.ts"] = DEMO_STORE

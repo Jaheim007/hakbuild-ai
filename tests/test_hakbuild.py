@@ -329,6 +329,47 @@ class TestGithub(Base):
         self.assertEqual(result["error"], "projet inconnu")
 
 
+class TestConvexDeploy(Base):
+    def test_deployment_from_key(self):
+        from hakbuild import convex_deploy
+
+        self.assertEqual(convex_deploy.deployment_from_key("prod:barberpro-123|abc"), "barberpro-123")
+        self.assertEqual(convex_deploy.deployment_from_key("dev:my-app|xyz"), "my-app")
+        self.assertIsNone(convex_deploy.deployment_from_key("nimportequoi"))
+        self.assertEqual(
+            convex_deploy.deployment_url("barberpro-123"), "https://barberpro-123.convex.cloud"
+        )
+
+    def test_eas_env_injection(self):
+        from hakbuild import convex_deploy
+
+        files = scaffold.app_files({"name": "EAS", "idea": "reservation", "platforms": "android"})
+        workspace = Path(self.tmp.name) / "eas_ws"
+        workspace.mkdir()
+        (workspace / "eas.json").write_text(files["eas.json"], encoding="utf-8")
+        self.assertTrue(convex_deploy.set_eas_env(workspace, "https://x.convex.cloud"))
+        data = json.loads((workspace / "eas.json").read_text(encoding="utf-8"))
+        for profile in ("preview", "production", "development"):
+            self.assertEqual(data["build"][profile]["env"]["EXPO_PUBLIC_CONVEX_URL"], "https://x.convex.cloud")
+
+    def test_deploy_without_key_is_explicit(self):
+        from hakbuild import convex_deploy
+
+        project_id = cli.create_project(self.conn, "NoConvex", "reservation", "android")
+        result = convex_deploy.deploy(self.conn, project_id)
+        self.assertFalse(result["ok"])
+        self.assertEqual(result["status"], "no_key")
+
+    def test_app_env_written(self):
+        from hakbuild import convex_deploy
+
+        workspace = Path(self.tmp.name) / "env_ws"
+        workspace.mkdir()
+        convex_deploy.write_app_env(workspace, "https://demo.convex.cloud")
+        self.assertIn("EXPO_PUBLIC_CONVEX_URL=https://demo.convex.cloud",
+                      (workspace / ".env").read_text(encoding="utf-8"))
+
+
 class TestServer(Base):
     def test_api_endpoints(self):
         httpd = server.make_server(self.conn, "127.0.0.1", 0)
