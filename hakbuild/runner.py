@@ -6,6 +6,7 @@ dependances manquent, l'echec est enregistre tel quel et remonte au projet.
 from __future__ import annotations
 
 import os
+import shlex
 import shutil
 import subprocess
 import time
@@ -66,9 +67,9 @@ def run(conn, project_id: str, command: str, cwd: Path, timeout: int = DEFAULT_T
     started = time.time()
     try:
         proc = subprocess.run(
-            command,
+            shlex.split(command),
             cwd=str(cwd),
-            shell=True,
+            shell=False,
             capture_output=True,
             text=True,
             timeout=timeout,
